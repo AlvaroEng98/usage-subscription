@@ -43,4 +43,4 @@ cargo run -- scan
 cargo run -- scan /ruta/a/.claude/projects
 ```
 
-Todavía no persiste datos en SQLite ni estima precios; esos son los siguientes límites deliberados del MVP.
+Los eventos ya se persisten de forma idempotente en `data/usage-subscription.db` mediante la migración `schema_migrations` versión 1. `stats` permite consultar agregados por fecha, modelo y proyecto. Todavía no estima precios ni modela suscripciones; esos son los siguientes límites deliberados del MVP.

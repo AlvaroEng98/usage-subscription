@@ -1,4 +1,5 @@
 mod collector;
+mod storage;
 
 use std::{env, path::{Path, PathBuf}};
 
@@ -9,6 +10,7 @@ fn main() {
     match args.next().as_deref() {
         Some("doctor") => doctor(),
         Some("scan") => scan(args.collect()),
+        Some("stats") => stats(),
         Some("--version") | Some("-V") => println!("usage-subscription {VERSION}"),
         Some("--help") | Some("-h") | None => print_help(),
         Some(command) => {
@@ -24,7 +26,7 @@ fn print_help() {
         "usage-subscription {VERSION}\n\n\
         A local-first monitor for AI usage and subscriptions.\n\n\
         USAGE:\n    usage-subscription <COMMAND>\n\n\
-        COMMANDS:\n    doctor       Check local data sources used by collectors\n    scan         Read Claude Code transcripts and summarize usage\n    help         Show this help\n\n\
+        COMMANDS:\n    doctor       Check local data sources used by collectors\n    scan         Read Claude Code transcripts and persist usage\n    stats        Show persisted usage grouped by date, model and project\n    help         Show this help\n\n\
         OPTIONS:\n    -h, --help       Show this help\n    -V, --version    Show the version"
     );
 }
@@ -70,12 +72,64 @@ fn scan(args: Vec<String>) {
             println!("  output tokens: {}", sum(&summary.events, |event| event.output_tokens));
             println!("  cache read tokens: {}", sum(&summary.events, |event| event.cache_read_tokens));
             println!("  cache creation tokens: {}", sum(&summary.events, |event| event.cache_creation_tokens));
+            match storage::UsageStore::open(&database_path()) {
+                Ok(store) => match store.insert_scan(&summary) {
+                    Ok(inserted) => println!("  new events persisted: {inserted}"),
+                    Err(error) => {
+                        eprintln!("Cannot persist scan: {error}");
+                        std::process::exit(1);
+                    }
+                },
+                Err(error) => {
+                    eprintln!("Cannot open database: {error}");
+                    std::process::exit(1);
+                }
+            }
         }
         Err(error) => {
             eprintln!("Cannot scan {}: {error}", path.display());
             std::process::exit(1);
         }
     }
+}
+
+fn stats() {
+    match storage::UsageStore::open(&database_path()).and_then(|store| store.stats()) {
+        Ok(stats) => {
+            println!("Usage statistics");
+            println!("  database: {}", database_path().display());
+            println!();
+            println!("Totals");
+            println!("  events: {}", stats.totals.events);
+            println!("  input tokens: {}", stats.totals.input_tokens);
+            println!("  output tokens: {}", stats.totals.output_tokens);
+            println!("  cache read tokens: {}", stats.totals.cache_read_tokens);
+            println!("  cache creation tokens: {}", stats.totals.cache_creation_tokens);
+            print_buckets("By date", &stats.dates);
+            print_buckets("By model", &stats.models);
+            print_buckets("By project", &stats.projects);
+        }
+        Err(error) => {
+            eprintln!("Cannot read database: {error}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn print_buckets(title: &str, buckets: &[storage::Bucket]) {
+    println!();
+    println!("{title}");
+    if buckets.is_empty() {
+        println!("  no data");
+        return;
+    }
+    for bucket in buckets {
+        println!("  {}  events: {}  tokens: {}", bucket.name, bucket.events, bucket.tokens);
+    }
+}
+
+fn database_path() -> PathBuf {
+    PathBuf::from("data/usage-subscription.db")
 }
 
 fn default_projects_path() -> Option<PathBuf> {

@@ -4,7 +4,9 @@ use std::{collections::HashSet, fs::File, io::{self, BufRead, BufReader}, path::
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UsageEvent {
     pub source: &'static str,
+    pub project: Option<String>,
     pub session_id: String,
+    pub message_id: Option<String>,
     pub recorded_at: Option<String>,
     pub model: Option<String>,
     pub input_tokens: u64,
@@ -28,7 +30,7 @@ pub fn scan_projects(root: &Path) -> io::Result<ScanSummary> {
 
     for file in files {
         summary.files += 1;
-        scan_transcript(&file, &mut summary)?;
+        scan_transcript(root, &file, &mut summary)?;
     }
 
     Ok(summary)
@@ -52,7 +54,7 @@ fn collect_jsonl_files(path: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> 
     Ok(())
 }
 
-fn scan_transcript(path: &Path, summary: &mut ScanSummary) -> io::Result<()> {
+fn scan_transcript(root: &Path, path: &Path, summary: &mut ScanSummary) -> io::Result<()> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
     let session_id = path
@@ -81,7 +83,7 @@ fn scan_transcript(path: &Path, summary: &mut ScanSummary) -> io::Result<()> {
             continue;
         }
 
-        if let Some(event) = usage_event(&value, &session_id, path) {
+        if let Some(event) = usage_event(&value, root, &session_id, path) {
             summary.events.push(event);
         }
     }
@@ -89,7 +91,7 @@ fn scan_transcript(path: &Path, summary: &mut ScanSummary) -> io::Result<()> {
     Ok(())
 }
 
-fn usage_event(value: &Value, session_id: &str, source_file: &Path) -> Option<UsageEvent> {
+fn usage_event(value: &Value, root: &Path, session_id: &str, source_file: &Path) -> Option<UsageEvent> {
     if value.get("type")?.as_str()? != "assistant" {
         return None;
     }
@@ -97,10 +99,17 @@ fn usage_event(value: &Value, session_id: &str, source_file: &Path) -> Option<Us
     let message = value.get("message")?;
     let usage = message.get("usage")?;
     let model = message.get("model").and_then(Value::as_str).map(str::to_owned);
+    let project = source_file
+        .strip_prefix(root)
+        .ok()
+        .and_then(|relative| relative.components().next())
+        .map(|component| component.as_os_str().to_string_lossy().into_owned());
 
     Some(UsageEvent {
         source: "claude-code",
+        project,
         session_id: session_id.to_owned(),
+        message_id: message.get("id").and_then(Value::as_str).map(str::to_owned),
         recorded_at: value.get("timestamp").and_then(Value::as_str).map(str::to_owned),
         model,
         input_tokens: number(usage, "input_tokens"),
@@ -146,6 +155,6 @@ mod tests {
             "type": "assistant",
             "message": { "model": "claude-sonnet" }
         });
-        assert!(usage_event(&value, "session", Path::new("session.jsonl")).is_none());
+        assert!(usage_event(&value, Path::new("."), "session", Path::new("session.jsonl")).is_none());
     }
 }

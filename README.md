@@ -11,6 +11,8 @@ Incluye:
 - comando `doctor` para detectar las fuentes locales de Claude Code;
 - comando `scan` para leer transcripts JSONL y resumir tokens de uso;
 - collector inicial con deduplicación por `message.id` y tolerancia a líneas inválidas;
+- persistencia local idempotente en SQLite;
+- comando `stats` con agregados por fecha, modelo y proyecto;
 - ejecución completamente local, sin credenciales ni llamadas de red.
 
 ## Ejecutar
@@ -18,6 +20,8 @@ Incluye:
 ```bash
 cargo run -- --help
 cargo run -- doctor
+cargo run -- scan
+cargo run -- stats
 cargo test
 ```
 
