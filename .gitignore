@@ -1,0 +1,21 @@
+# Rust
+/target/
+
+# Local application data
+/data/
+*.db
+*.db-shm
+*.db-wal
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Reference repository is maintained independently
+/session-lens/
