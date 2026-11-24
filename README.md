@@ -9,7 +9,8 @@ Primer corte del MVP: aplicación base en Rust con un CLI independiente de Claud
 Incluye:
 
 - comando `doctor` para detectar las fuentes locales de Claude Code;
-- estructura preparada para collectors, almacenamiento local y recomendaciones;
+- comando `scan` para leer transcripts JSONL y resumir tokens de uso;
+- collector inicial con deduplicación por `message.id` y tolerancia a líneas inválidas;
 - ejecución completamente local, sin credenciales ni llamadas de red.
 
 ## Ejecutar
